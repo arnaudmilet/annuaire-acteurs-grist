@@ -1,0 +1,128 @@
+{
+  "tables": {
+    "Acteurs": {
+      "columns": {
+        "Nom_du_projet": {
+          "type": "Text"
+        },
+        "url": {
+          "type": "Text"
+        },
+        "Etape": {
+          "type": "RefList:Etapes"
+        },
+        "Sous_etape": {
+          "type": "RefList:Sous_etapes"
+        },
+        "Objectif": {
+          "type": "RefList:Types_objectifs"
+        },
+        "Description_acteur": {
+          "type": "Text"
+        },
+        "Structures_porteuses": {
+          "type": "RefList:Structures"
+        },
+        "Partenaires_impliques": {
+          "type": "RefList:Structures"
+        },
+        "Territoire_du_projet": {
+          "type": "Text"
+        },
+        "Coordinateur_ice": {
+          "type": "RefList:Personnes_ressource"
+        }
+      }
+    },
+    "Structures": {
+      "columns": {
+        "Structure": {
+          "type": "Text"
+        },
+        "url": {
+          "type": "Text"
+        },
+        "type_acteur": {
+          "type": "Ref:Types_acteurs"
+        },
+        "SIRET": {
+          "type": "Text"
+        },
+        "Label": {
+          "type": "RefList:Type_label"
+        },
+        "Est_un_projet_en_soi": {
+          "type": "Bool"
+        },
+        "Strusture_s_mere_s_": {
+          "type": "RefList:Structures"
+        }
+      }
+    },
+    "Personnes_ressource": {
+      "columns": {
+        "Nom": {
+          "type": "Text"
+        },
+        "Prenom": {
+          "type": "Text"
+        },
+        "Structure": {
+          "type": "RefList:Structures"
+        },
+        "adresse_mail": {
+          "type": "Text"
+        },
+        "id2": {
+          "type": "Any",
+          "formula": true
+        }
+      }
+    },
+    "Etapes": {
+      "columns": {
+        "Etape": {
+          "type": "Text"
+        },
+        "Description": {
+          "type": "Text"
+        }
+      }
+    },
+    "Sous_etapes": {
+      "columns": {
+        "Sous_etape": {
+          "type": "Text"
+        },
+        "Etape": {
+          "type": "Ref:Etapes"
+        }
+      }
+    },
+    "Types_objectifs": {
+      "columns": {
+        "Objectif": {
+          "type": "Text"
+        },
+        "Famille": {
+          "type": "Text"
+        }
+      }
+    },
+    "Types_acteurs": {
+      "columns": {
+        "Type_acteur": {
+          "type": "Text"
+        }
+      }
+    },
+    "Type_label": {
+      "columns": {
+        "Label": {
+          "type": "Text"
+        }
+      }
+    }
+  },
+  "note": "Types Grist indicatifs. Les noms des tables de référentiels et de leurs colonnes sont à confirmer dans le modèle .grist."
+}
