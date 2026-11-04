@@ -1,0 +1,341 @@
+<!-- Widget Grist : réseau porteurs / partenaires
+     À coller dans « Widget Creator » (accès : Accès complet au document, lecture seule en pratique). -->
+<meta charset="utf-8">
+<script src="grist-plugin-api.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+<style>
+  :root { --bg:#fff; --fg:#1f2933; --muted:#6b7280; --line:#e5e7eb; --accent:#2f5d50; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; font:13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color:var(--fg); background:var(--bg); }
+  #app { display:flex; flex-direction:column; height:100%; }
+  #bar { display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #bar label { display:flex; align-items:center; gap:5px; color:var(--muted); }
+  select, input[type=search], input[type=number] { font:inherit; padding:3px 6px; border:1px solid var(--line); border-radius:4px; background:#fff; color:var(--fg); }
+  input[type=number] { width:52px; }
+  #main { flex:1; display:flex; min-height:0; }
+  #net { flex:1; min-width:0; }
+  #side { width:270px; border-left:1px solid var(--line); overflow:auto; padding:10px; }
+  #side h3 { margin:0 0 4px; font-size:14px; }
+  #side .k { color:var(--muted); margin-top:10px; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
+  #side ul { margin:4px 0 0; padding-left:16px; }
+  #side li { cursor:pointer; }
+  #side li:hover { text-decoration:underline; }
+  #legend { display:flex; flex-wrap:wrap; gap:4px 10px; margin-top:6px; }
+  .sw { display:inline-flex; align-items:center; gap:4px; font-size:12px; color:var(--muted); }
+  .sw i { width:10px; height:10px; border-radius:50%; display:inline-block; }
+  .sw i.box { border-radius:2px; }
+  .ln { width:22px; height:0; border-top:2px solid #555; display:inline-block; }
+  .ln.dash { border-top:2px dashed #aaa; }
+  #msg { padding:20px; color:var(--muted); }
+  #stats { color:var(--muted); margin-left:auto; }
+  #contact { margin-top:16px; padding:10px; border-radius:6px; background:#eef4f1; border:1px solid #cfe0d8; font-size:12px; }
+  #contact b { color:var(--accent); }
+  #contact a.btn { cursor:pointer;  display:inline-block; margin-top:6px; padding:4px 10px; border-radius:4px; background:var(--accent); color:#fff; text-decoration:none; }
+  #modal { position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; z-index:10; }
+  #modal .box { background:#fff; border-radius:8px; padding:16px 18px; width:min(440px,92vw); box-shadow:0 8px 30px rgba(0,0,0,.2); }
+  #modal h3 { margin:0 0 6px; color:var(--accent); }
+  #modal .mail { font-size:15px; font-weight:600; user-select:all; padding:6px 8px; background:#f3f4f6; border-radius:4px; margin:8px 0; word-break:break-all; }
+  #modal textarea { width:100%; height:110px; font:inherit; font-size:12px; border:1px solid var(--line); border-radius:4px; padding:6px; }
+  #modal .row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  #modal button { font:inherit; padding:5px 10px; border-radius:4px; border:1px solid var(--accent); background:#fff; color:var(--accent); cursor:pointer; text-decoration:none; }
+  #modal .primary { background:var(--accent); color:#fff; }
+  #modal .ok { color:#3a9e5f; font-size:12px; align-self:center; }
+  #join { cursor:pointer; padding:3px 10px; border-radius:4px; background:var(--accent); color:#fff; text-decoration:none; white-space:nowrap; }
+</style>
+
+<div id="app">
+  <div id="bar">
+    <label>Étape <select id="fEtape"><option value="">Toutes</option></select></label>
+    <label>Objectif <select id="fObj"><option value="">Tous</option></select></label>
+    <label><input type="checkbox" id="fPart" checked> Partenaires</label>
+    <label title="0 = ne rien masquer">Masquer les structures liées à plus de <input type="number" id="fMax" min="0" value="0"> projets</label>
+    <label>Chercher <input type="search" id="fSearch" placeholder="projet ou structure" list="names"></label>
+    <datalist id="names"></datalist>
+    <label title="Niveaux de voisinage affichés autour de l'élément cherché">Voisinage
+      <select id="fDepth"><option value="1">1 niveau</option><option value="2">2 niveaux</option><option value="3">3 niveaux</option></select></label>
+    <button id="fReset" type="button" style="display:none">✕ Tout afficher</button>
+    <span id="stats"></span>
+    <a id="join" role="button">Contribuer</a>
+  </div>
+  <div id="main">
+    <div id="net"><div id="msg">Chargement…</div></div>
+    <div id="side">
+      <div id="info"><p style="color:var(--muted)">Clique sur un nœud pour voir ses liens. Un clic sur un projet sélectionne aussi sa ligne dans Grist.</p></div>
+      <div class="k">Légende</div>
+      <div id="legend"></div>
+      <div style="margin-top:8px" class="sw"><span class="ln"></span> porte le projet</div><br>
+      <div class="sw"><span class="ln dash"></span> partenaire</div>
+      <div id="contact">
+        <b>Envie de contribuer ?</b><br>
+        Collecte de données, recensement d'initiatives, évolution de l'outil… Écris-nous pour rejoindre la démarche.<br>
+        <a class="btn" id="contactBtn" role="button">Envoyer une demande</a>
+        <div style="margin-top:4px;color:var(--muted)" id="contactMail"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="modal"><div class="box">
+  <h3>Contribuer à la cartographie</h3>
+  <div>Envoie ta demande (collecte, recensement d'initiatives, évolution de l'outil…) à :</div>
+  <div class="mail" id="mAddr"></div>
+  <div style="color:var(--muted);font-size:12px">Modèle de message :</div>
+  <textarea id="mBody" readonly></textarea>
+  <div class="row">
+    <button class="primary" id="mCopyAddr">Copier l'adresse</button>
+    <button id="mCopyAll">Copier le message</button>
+    <span class="ok" id="mOk"></span>
+    <button id="mClose" style="margin-left:auto">Fermer</button>
+  </div>
+</div></div>
+
+<script>
+/* ---------- Configuration : noms des tables et colonnes Grist (identifiants, pas libellés) ---------- */
+const CFG = {
+  acteurs: "Acteurs", nomProjet: "Nom_du_projet",
+  porteurs: "Structures_porteuses", partenaires: "Partenaires_impliques",
+  etape: "Etape", objectif: "Objectif",
+  structures: "Structures", nomStructure: "Structure", typeActeur: "type_acteur",
+  contact: "arnaud.milet@d-sidd.com",
+  contactSujet: "Contribuer à la cartographie des acteurs du système alimentaire",
+  contactCorps: "Bonjour,\n\nJe souhaite contribuer à la cartographie (collecte, recensement d'initiatives, évolution de l'outil…).\n\nNom :\nStructure :\nCe que je propose :\n",
+  // Repli si les métadonnées ne sont pas lisibles :
+  fallbackTables: { Etape: "Etapes", Objectif: "Types_objectifs", type_acteur: "Types_acteurs" }
+};
+const PALETTE = ["#2f7ebc","#e6862e","#3a9e5f","#c94c4c","#8a6bbf","#8c6d4f","#d36fa6","#7f7f7f","#a8a23a","#2aa3b8","#5b5bd6","#b5651d","#4f8f2f","#9c2f6b","#3c6e71","#c2a400"];
+const PROJECT_COLOR = "#1f2933";
+
+grist.ready({ requiredAccess: "full" });
+/* Contact : fenêtre avec adresse à copier (les liens mailto: sont souvent bloqués dans l'iframe Grist) */
+{ const g = id => document.getElementById(id);
+  const full = `À : ${CFG.contact}\nObjet : ${CFG.contactSujet}\n\n${CFG.contactCorps}`;
+  g("contactMail").textContent = CFG.contact; g("mAddr").textContent = CFG.contact;
+  g("mBody").value = full;
+  const copy = async (txt, msg) => {
+    let ok = false;
+    try { await navigator.clipboard.writeText(txt); ok = true; } catch (e) {
+      const t = document.createElement("textarea"); t.value = txt; document.body.appendChild(t); t.select();
+      try { ok = document.execCommand("copy"); } catch (e2) {} t.remove(); }
+    g("mOk").textContent = ok ? msg : "Copie impossible : sélectionne le texte à la main.";
+  };
+  const open = () => { g("mOk").textContent = ""; g("modal").style.display = "flex"; };
+  g("join").onclick = open; g("contactBtn").onclick = open;
+  g("mClose").onclick = () => g("modal").style.display = "none";
+  g("modal").onclick = e => { if (e.target.id === "modal") g("modal").style.display = "none"; };
+  g("mCopyAddr").onclick = () => copy(CFG.contact, "Adresse copiée ✓");
+  g("mCopyAll").onclick = () => copy(full, "Message copié ✓");
+}
+
+let META = null, DATA = null, network = null, nodesDS = null, edgesDS = null;
+const $ = id => document.getElementById(id);
+const norm = s => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+const ids = v => Array.isArray(v) ? (v[0] === "L" ? v.slice(1) : v) : (typeof v === "number" && v > 0 ? [v] : []);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+async function fetchTable(t) { return await grist.docApi.fetchTable(t); }
+function rows(tbl) { const n = (tbl.id || []).length, out = []; for (let i = 0; i < n; i++) { const r = {}; for (const k in tbl) r[k] = tbl[k][i]; out.push(r); } return out; }
+
+async function loadMeta() {
+  try {
+    const [tabs, cols] = await Promise.all([fetchTable("_grist_Tables"), fetchTable("_grist_Tables_column")]);
+    return { tabs: rows(tabs), cols: rows(cols) };
+  } catch (e) { return null; }
+}
+function firstLabelCol(tbl) {
+  return Object.keys(tbl).find(k => k !== "id" && k !== "manualSort" && !k.startsWith("gristHelper") && (tbl[k] || []).some(v => typeof v === "string" && v)) || "id";
+}
+/* Renvoie une Map id -> libellé pour la colonne Ref/RefList table.col */
+async function refLabels(tableId, colId) {
+  let target = null, labelCol = null;
+  if (META) {
+    const t = META.tabs.find(x => x.tableId === tableId);
+    const c = t && META.cols.find(x => x.parentId === t.id && x.colId === colId);
+    if (c && /^Ref(List)?:/.test(c.type)) {
+      target = c.type.split(":")[1];
+      const vc = c.visibleCol && META.cols.find(x => x.id === c.visibleCol);
+      labelCol = vc ? vc.colId : null;
+    }
+  }
+  if (!target) target = colId === CFG.porteurs || colId === CFG.partenaires ? CFG.structures : CFG.fallbackTables[colId];
+  if (!target) return new Map();
+  const tbl = await fetchTable(target);
+  if (!labelCol || !(labelCol in tbl)) labelCol = target === CFG.structures ? CFG.nomStructure : firstLabelCol(tbl);
+  const m = new Map(); tbl.id.forEach((id, i) => m.set(id, String(tbl[labelCol][i] ?? "")));
+  return m;
+}
+
+async function loadData() {
+  META = META || await loadMeta();
+  const [act, str] = await Promise.all([fetchTable(CFG.acteurs), fetchTable(CFG.structures)]);
+  const [etapeL, objL, typeL] = await Promise.all([
+    refLabels(CFG.acteurs, CFG.etape), refLabels(CFG.acteurs, CFG.objectif), refLabels(CFG.structures, CFG.typeActeur)]);
+  const structures = new Map();
+  rows(str).forEach(s => structures.set(s.id, {
+    id: s.id, name: String(s[CFG.nomStructure] ?? ""),
+    type: ids(s[CFG.typeActeur]).map(i => typeL.get(i)).filter(Boolean)[0] || "Non renseigné", url: s.url || ""
+  }));
+  const projects = rows(act).map(a => ({
+    id: a.id, name: String(a[CFG.nomProjet] ?? ""), url: a.url || "",
+    etapes: ids(a[CFG.etape]).map(i => etapeL.get(i)).filter(Boolean),
+    objectifs: ids(a[CFG.objectif]).map(i => objL.get(i)).filter(Boolean),
+    porteurs: ids(a[CFG.porteurs]).filter(i => structures.has(i)),
+    partenaires: ids(a[CFG.partenaires]).filter(i => structures.has(i))
+  })).filter(p => p.name);
+  return { structures, projects };
+}
+
+function fillSelect(sel, values) {
+  const cur = sel.value; const first = sel.options[0].outerHTML;
+  sel.innerHTML = first + [...values].sort((a, b) => a.localeCompare(b, "fr")).map(v => `<option>${esc(v)}</option>`).join("");
+  if ([...values].includes(cur)) sel.value = cur;
+}
+
+const typeColor = new Map();
+function colorOf(type) {
+  if (!typeColor.has(type)) typeColor.set(type, type === "Non renseigné" ? "#bdbdbd" : PALETTE[typeColor.size % PALETTE.length]);
+  return typeColor.get(type);
+}
+
+/* Construit le graphe filtré */
+function buildGraph() {
+  const { structures, projects } = DATA;
+  const fE = $("fEtape").value, fO = $("fObj").value, withPart = $("fPart").checked, max = +$("fMax").value || 0;
+  const shown = projects.filter(p => (!fE || p.etapes.includes(fE)) && (!fO || p.objectifs.includes(fO)));
+  // degré de chaque structure dans la sélection
+  const deg = new Map();
+  shown.forEach(p => new Set([...p.porteurs, ...(withPart ? p.partenaires : [])]).forEach(s => deg.set(s, (deg.get(s) || 0) + 1)));
+  // une structure qui porte le même nom qu'un projet affiché est fusionnée avec lui
+  const projByName = new Map(shown.map(p => [norm(p.name), p]));
+  const nodeOfStruct = s => { const p = projByName.get(norm(structures.get(s).name)); return p ? "p" + p.id : "s" + s; };
+  const nodes = new Map(), edges = [];
+  shown.forEach(p => nodes.set("p" + p.id, {
+    id: "p" + p.id, label: p.name, shape: "box", kind: "p", ref: p,
+    color: { background: PROJECT_COLOR, border: PROJECT_COLOR, highlight: { background: "#000", border: "#000" } },
+    font: { color: "#fff", size: 13 }, margin: 6, widthConstraint: { maximum: 170 }
+  }));
+  const addStruct = s => {
+    const nid = nodeOfStruct(s);
+    if (!nodes.has(nid)) {
+      const st = structures.get(s), c = colorOf(st.type), d = deg.get(s) || 1;
+      nodes.set(nid, { id: nid, label: st.name, shape: "dot", kind: "s", ref: st, size: 8 + 5 * Math.sqrt(d),
+        color: { background: c, border: c, highlight: { background: c, border: "#000" } },
+        font: { size: 12, color: "#1f2933", strokeWidth: 3, strokeColor: "#fff" }, title: `${st.name} — ${st.type}` });
+    }
+    return nid;
+  };
+  shown.forEach(p => {
+    const seen = new Set();
+    p.porteurs.forEach(s => { if (max && deg.get(s) > max) return; const n = addStruct(s); if (n === "p" + p.id) return;
+      seen.add(s); edges.push({ from: n, to: "p" + p.id, width: 2.5, color: { color: "#555", highlight: "#000" }, kind: "porteur" }); });
+    if (withPart) p.partenaires.forEach(s => { if (seen.has(s) || (max && deg.get(s) > max)) return; const n = addStruct(s); if (n === "p" + p.id) return;
+      edges.push({ from: n, to: "p" + p.id, width: 1, dashes: [5, 5], color: { color: "#b0b0b0", highlight: "#555" }, kind: "partenaire" }); });
+  });
+  edges.forEach((e, i) => e.id = "e" + i);
+  return { nodes: [...nodes.values()], edges, nProj: shown.length };
+}
+
+/* Mode focus : ne garder que le voisinage du nœud cherché */
+let FOCUS = null;
+function focusSubgraph(g, root, depth) {
+  const adj = new Map();
+  g.edges.forEach(e => { [[e.from, e.to], [e.to, e.from]].forEach(([a, b]) => { if (!adj.has(a)) adj.set(a, []); adj.get(a).push(b); }); });
+  const keep = new Set([root]); let frontier = [root];
+  for (let d = 0; d < depth; d++) {
+    const next = [];
+    frontier.forEach(n => (adj.get(n) || []).forEach(m => { if (!keep.has(m)) { keep.add(m); next.push(m); } }));
+    frontier = next;
+  }
+  const nodes = g.nodes.filter(n => keep.has(n.id));
+  return { nodes, edges: g.edges.filter(e => keep.has(e.from) && keep.has(e.to)), nProj: nodes.filter(n => n.kind === "p").length };
+}
+
+function render() {
+  const full = buildGraph();
+  $("names").innerHTML = full.nodes.map(n => `<option value="${esc(n.label)}">`).join("");
+  if (FOCUS && !full.nodes.some(n => n.id === FOCUS)) FOCUS = null;   // élément masqué par les filtres
+  const g = FOCUS ? focusSubgraph(full, FOCUS, +$("fDepth").value) : full;
+  $("fReset").style.display = FOCUS ? "" : "none";
+  $("stats").textContent = `${g.nProj} projets · ${g.nodes.length - g.nProj} structures · ${g.edges.length} liens` + (FOCUS ? " (réseau filtré)" : "");
+  // légende
+  const types = [...new Set(g.nodes.filter(n => n.kind === "s").map(n => n.ref.type))].sort((a, b) => a.localeCompare(b, "fr"));
+  $("legend").innerHTML = `<span class="sw"><i class="box" style="background:${PROJECT_COLOR}"></i>Projet</span>` +
+    types.map(t => `<span class="sw"><i style="background:${colorOf(t)}"></i>${esc(t)}</span>`).join("");
+  if (!network) {
+    $("net").innerHTML = "";
+    nodesDS = new vis.DataSet(g.nodes); edgesDS = new vis.DataSet(g.edges);
+    network = new vis.Network($("net"), { nodes: nodesDS, edges: edgesDS }, {
+      physics: { solver: "forceAtlas2Based", forceAtlas2Based: { gravitationalConstant: -60, springLength: 110, avoidOverlap: 0.4 }, stabilization: { iterations: 300 } },
+      interaction: { hover: true, tooltipDelay: 150, multiselect: false },
+      edges: { smooth: { type: "continuous" }, selectionWidth: 1.5 }
+    });
+    network.on("stabilizationIterationsDone", () => network.setOptions({ physics: { enabled: false } }));
+    network.on("click", ev => { if (ev.nodes.length) select(ev.nodes[0], true); else showHelp(); });
+    network.on("dragStart", () => network.setOptions({ physics: { enabled: true } }));
+    network.on("dragEnd", () => setTimeout(() => network.setOptions({ physics: { enabled: false } }), 800));
+  } else {
+    nodesDS.clear(); edgesDS.clear(); nodesDS.add(g.nodes); edgesDS.add(g.edges);
+    network.setOptions({ physics: { enabled: true } }); network.stabilize(200);
+    setTimeout(() => { network.setOptions({ physics: { enabled: false } }); network.fit({ animation: { duration: 400 } }); }, 1500);
+  }
+  if (FOCUS) { const f = FOCUS; setTimeout(() => { if (FOCUS === f && nodesDS.get(f)) select(f, false); }, 1600); }
+}
+
+function showHelp() { $("info").innerHTML = `<p style="color:var(--muted)">Clique sur un nœud pour voir ses liens. Un clic sur un projet sélectionne aussi sa ligne dans Grist.</p>`; }
+function list(title, items) {
+  if (!items.length) return "";
+  return `<div class="k">${title} (${items.length})</div><ul>` + items.map(n => `<li data-id="${n.id}">${esc(n.label)}</li>`).join("") + "</ul>";
+}
+function select(nid, fromClick) {
+  if (nid == null || !nodesDS) return;
+  const node = nodesDS.get(nid); if (!node) return;
+  network.selectNodes([nid]); network.focus(nid, { scale: Math.max(network.getScale(), 0.9), animation: { duration: 400 } });
+  const conn = network.getConnectedEdges(nid).map(e => edgesDS.get(e));
+  const other = e => nodesDS.get(e.from === nid ? e.to : e.from);
+  const por = conn.filter(e => e.kind === "porteur").map(other), par = conn.filter(e => e.kind === "partenaire").map(other);
+  let h = `<h3>${esc(node.label)}</h3>`;
+  if (node.kind === "p") {
+    const p = node.ref;
+    if (p.etapes.length) h += `<div><b>Étape :</b> ${esc(p.etapes.join(", "))}</div>`;
+    if (p.objectifs.length) h += `<div><b>Objectif :</b> ${esc(p.objectifs.join(", "))}</div>`;
+    h += list("Porteurs", por) + list("Partenaires", par);
+    // projets reliés par une structure fusionnée (ex. Caisse alimentaire commune)
+    if (fromClick) grist.setCursorPos({ rowId: p.id }).catch(() => {});
+  } else {
+    h += `<div style="color:var(--muted)">${esc(node.ref.type)}</div>`;
+    h += list("Porte", por) + list("Partenaire de", par);
+  }
+  if (node.ref.url) h += `<div class="k">Lien</div><a href="${esc(node.ref.url)}" target="_blank" rel="noopener">${esc(node.ref.url)}</a>`;
+  $("info").innerHTML = h;
+  $("info").querySelectorAll("li[data-id]").forEach(li => li.onclick = () => select(li.dataset.id, true));
+}
+
+["fEtape", "fObj", "fPart", "fMax", "fDepth"].forEach(id => $(id).addEventListener("change", render));
+function search() {
+  const q = norm($("fSearch").value);
+  if (!q) { if (FOCUS) { FOCUS = null; showHelp(); render(); } return; }
+  const all = buildGraph().nodes;
+  const hit = all.find(n => norm(n.label) === q) || all.find(n => norm(n.label).includes(q));
+  if (!hit) { $("stats").textContent = "Aucun résultat pour « " + $("fSearch").value + " »"; return; }
+  FOCUS = hit.id; render();
+  if (hit.kind === "p") grist.setCursorPos({ rowId: hit.ref.id }).catch(() => {});
+}
+$("fSearch").addEventListener("change", search);
+$("fSearch").addEventListener("search", search);   // touche Entrée ou croix d'effacement
+$("fReset").addEventListener("click", () => { $("fSearch").value = ""; FOCUS = null; showHelp(); render(); });
+
+let timer = null;
+async function refresh() {
+  try {
+    DATA = await loadData();
+    fillSelect($("fEtape"), new Set(DATA.projects.flatMap(p => p.etapes)));
+    fillSelect($("fObj"), new Set(DATA.projects.flatMap(p => p.objectifs)));
+    render();
+  } catch (e) {
+    $("net").innerHTML = `<div id="msg">Impossible de lire les données : ${esc(e.message || e)}<br>
+      Vérifie que le widget a l'<b>accès complet au document</b> et que les noms de tables/colonnes de CFG (en haut du code) correspondent à ta base.</div>`;
+    network = null;
+  }
+}
+grist.onRecords(() => { clearTimeout(timer); timer = setTimeout(refresh, 300); });
+grist.onRecord(rec => { if (rec && nodesDS && nodesDS.get("p" + rec.id)) select("p" + rec.id, false); });
+refresh();
+</script>
